@@ -30,6 +30,10 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
 # Detect local public IP
 detect_local_ip() {
     print_status "Detecting your public IP address..."

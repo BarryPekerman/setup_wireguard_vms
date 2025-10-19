@@ -40,8 +40,6 @@ Banner /etc/ssh/banner
 # Match blocks for additional security
 Match User ubuntu
     AllowUsers ubuntu
-    ForceCommand internal-sftp
-    ChrootDirectory /home/ubuntu
     X11Forwarding no
-    AllowTcpForwarding no
+    AllowTcpForwarding yes
 
