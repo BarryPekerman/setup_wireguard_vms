@@ -1,0 +1,43 @@
+---
+# Global variables for WireGuard setup
+aws_region: us-west-2
+project_name: wireguard-setup
+
+# Network configuration
+vpc_cidr: 10.0.0.0/16
+public_subnet_cidr: 10.0.1.0/24
+private_subnet_cidr: 10.0.2.0/24
+
+# Instance configuration
+instance_type: t3.nano
+key_name: wireguard-key
+
+# Security configuration - Auto-detect your public IP with error handling
+# Try multiple methods with fallbacks for reliability
+allowed_ssh_cidrs: "{{ 
+  lookup('pipe', 'curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo FAIL') |
+  default(lookup('pipe', 'dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo FAIL')) |
+  default(lookup('pipe', 'wget -qO- --timeout=5 ifconfig.me 2>/dev/null || echo FAIL')) |
+  default('0.0.0.0')
+}}/32"
+
+allowed_wireguard_cidrs: "{{ 
+  lookup('pipe', 'curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo FAIL') |
+  default(lookup('pipe', 'dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo FAIL')) |
+  default(lookup('pipe', 'wget -qO- --timeout=5 ifconfig.me 2>/dev/null || echo FAIL')) |
+  default('0.0.0.0')
+}}/32"
+
+# Manual override (uncomment and set your IP if auto-detection fails):
+# allowed_ssh_cidrs: "203.0.113.0/24"  # Replace with your IP/network
+# allowed_wireguard_cidrs: "203.0.113.0/24"  # Replace with your IP/network
+
+# WireGuard configuration
+wireguard_interface: wg0
+wireguard_port: 51820
+wireguard_network: 10.0.3.0/24
+server_ip: 10.0.3.1
+client_ip: 10.0.3.2
+
+# Global Ansible settings
+ansible_python_interpreter: /usr/bin/python3

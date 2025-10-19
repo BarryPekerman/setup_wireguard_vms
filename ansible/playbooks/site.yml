@@ -1,0 +1,66 @@
+---
+- name: Complete WireGuard AWS Setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aws_region: "{{ aws_region | default('us-west-2') }}"
+    project_name: "{{ project_name | default('wireguard-setup') }}"
+
+  tasks:
+    - name: Detect public IP with error handling
+      include: detect_ip.yml
+
+    - name: Set final security variables
+      set_fact:
+        allowed_ssh_cidrs: "{{ final_ssh_cidrs | default('0.0.0.0/32') }}"
+        allowed_wireguard_cidrs: "{{ final_wireguard_cidrs | default('0.0.0.0/32') }}"
+    - name: Deploy AWS Infrastructure
+      include: infrastructure.yml
+      vars:
+        aws_region: "{{ aws_region }}"
+        project_name: "{{ project_name }}"
+        allowed_ssh_cidrs: "{{ allowed_ssh_cidrs }}"
+        allowed_wireguard_cidrs: "{{ allowed_wireguard_cidrs }}"
+
+    - name: Wait for infrastructure to be ready
+      pause:
+        seconds: 60
+        prompt: "Waiting for instances to be fully ready..."
+
+    - name: Configure WireGuard on instances
+      include: wireguard.yml
+      vars:
+        inventory_file: "{{ playbook_dir }}/inventory/infrastructure.ini"
+
+    - name: Test SSH connectivity and tunneling
+      include: test_connectivity.yml
+      vars:
+        inventory_file: "{{ playbook_dir }}/inventory/infrastructure.ini"
+
+    - name: Display final connection information
+      debug:
+        msg: |
+          🎉 WireGuard setup completed successfully!
+          
+          Your infrastructure is ready:
+          - Bastion Host: {{ bastion_public_ip | default('Check infrastructure.ini') }}
+          - Private Instance: {{ private_instance_ip | default('Check infrastructure.ini') }}
+          
+          SSH Tunneling Commands:
+          - Direct SSH to Bastion: ssh -i ~/.ssh/id_rsa ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}
+          - SSH to Private via Bastion: ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}' ubuntu@{{ private_instance_ip | default('Private_IP') }}
+          
+          WireGuard Network: 10.0.3.0/24
+          - Server (Bastion): 10.0.3.1
+          - Client (Private): 10.0.3.2
+          
+          Test connectivity:
+          - From your local machine: ping 10.0.3.1
+          - From bastion to private: ping 10.0.3.2
+          
+          SSH Tunneling Benefits:
+          ✅ No SSM required - pure SSH
+          ✅ Standard Ansible patterns
+          ✅ Lower cost and complexity
+          ✅ Better performance than SSM

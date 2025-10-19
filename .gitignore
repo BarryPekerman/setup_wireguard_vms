@@ -1,0 +1,66 @@
+# WireGuard AWS Setup - Whitelist Git Ignore
+# This is a WHITELIST approach - only allow specific files needed to run the project
+# 
+# SECURITY NOTE: This whitelist approach ensures only necessary files are tracked
+# and sensitive data (keys, state files, generated configs) are never committed
+
+# Ignore everything by default
+*
+
+# Allow project structure directories
+!*/
+!.gitignore
+!.gitkeep
+
+# Allow main documentation files
+!README.md
+!DETAILED_GUIDE.md
+
+# Allow Terraform configuration files (source code only)
+!terraform/main.tf
+!terraform/variables.tf
+!terraform/outputs.tf
+!terraform/versions.tf
+!terraform/terraform.tfvars.example
+!terraform/README.md
+!terraform/keys/.gitkeep
+
+# Allow Ansible configuration files
+!ansible/playbooks/*.yml
+!ansible/templates/*.j2
+!ansible/group_vars/*.yml
+!ansible/requirements.yml
+!ansible/ansible.cfg
+!ansible/README.md
+!ansible/scripts/*.sh
+
+# Allow automation scripts
+!scripts/*.sh
+
+# Allow example files
+!*.example
+!**/*.example
+
+# Explicitly ignore sensitive and generated files (SECURITY CRITICAL)
+terraform/.terraform/
+terraform/terraform.tfstate*
+terraform/terraform.tfvars
+terraform/keys/wireguard_key*
+ansible/inventory/infrastructure.ini
+ansible/collections/
+backup_*/
+local_*
+ssh_config
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Additional security exclusions
+**/terraform.tfstate*
+**/terraform.tfvars
+**/wireguard_key*
+**/infrastructure.ini
+**/local_*
+**/ssh_config
+**/backup_*

@@ -1,0 +1,253 @@
+---
+- name: Deploy AWS Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aws_region: "{{ aws_region | default('us-west-2') }}"
+    project_name: "{{ project_name | default('wireguard-setup') }}"
+    vpc_cidr: "{{ vpc_cidr | default('10.0.0.0/16') }}"
+    public_subnet_cidr: "{{ public_subnet_cidr | default('10.0.1.0/24') }}"
+    private_subnet_cidr: "{{ private_subnet_cidr | default('10.0.2.0/24') }}"
+    instance_type: "{{ instance_type | default('t3.nano') }}"
+    key_name: "{{ key_name | default('wireguard-key') }}"
+
+  tasks:
+    - name: Get current AWS account ID
+      community.aws.sts_caller_info:
+      register: caller_info
+
+    - name: Get latest Ubuntu AMI
+      community.aws.ec2_ami_info:
+        region: "{{ aws_region }}"
+        owners: ["099720109477"]  # Canonical
+        filters:
+          name: "ubuntu/images/hvm-ssd/ubuntu-22.04-lts-amd64-server-*"
+          state: "available"
+        most_recent: true
+      register: ubuntu_ami
+
+    - name: Create VPC
+      community.aws.ec2_vpc_net:
+        name: "{{ project_name }}-vpc"
+        cidr_block: "{{ vpc_cidr }}"
+        dns_hostnames: true
+        dns_support: true
+        state: present
+        region: "{{ aws_region }}"
+      register: vpc
+
+    - name: Create Internet Gateway
+      community.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+      register: igw
+
+    - name: Get availability zones
+      community.aws.ec2_az_info:
+        region: "{{ aws_region }}"
+        state: "available"
+      register: azs
+
+    - name: Create public subnet
+      community.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ public_subnet_cidr }}"
+        az: "{{ azs.availability_zones[0].zone_name }}"
+        map_public_ip_on_launch: true
+        region: "{{ aws_region }}"
+        state: present
+      register: public_subnet
+
+    - name: Create private subnet
+      community.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ private_subnet_cidr }}"
+        az: "{{ azs.availability_zones[0].zone_name }}"
+        region: "{{ aws_region }}"
+        state: present
+      register: private_subnet
+
+    - name: Create route table for public subnet
+      community.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+      register: public_route_table
+
+    - name: Add route to internet gateway
+      community.aws.ec2_vpc_route:
+        vpc_id: "{{ vpc.vpc.id }}"
+        route_table_id: "{{ public_route_table.route_table_id }}"
+        destination_cidr_block: "0.0.0.0/0"
+        gateway_id: "{{ igw.gateway_id }}"
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Associate public subnet with route table
+      community.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc.vpc.id }}"
+        route_table_id: "{{ public_route_table.route_table_id }}"
+        subnets:
+          - "{{ public_subnet.subnet.id }}"
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Create security group for bastion
+      community.aws.ec2_group:
+        name: "{{ project_name }}-bastion-sg"
+        description: "Security group for bastion host"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: "{{ allowed_ssh_cidrs | default('0.0.0.0/0') }}"
+          - proto: udp
+            ports:
+              - 51820
+            cidr_ip: "{{ allowed_wireguard_cidrs | default('0.0.0.0/0') }}"
+          - proto: all
+            ports:
+              - -1
+            cidr_ip: "0.0.0.0/0"
+            rule_type: egress
+        state: present
+      register: bastion_sg
+
+    - name: Create security group for private instance
+      community.aws.ec2_group:
+        name: "{{ project_name }}-private-sg"
+        description: "Security group for private instance"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            group_id: "{{ bastion_sg.group_id }}"
+          - proto: udp
+            ports:
+              - 51820
+            group_id: "{{ bastion_sg.group_id }}"
+          - proto: all
+            ports:
+              - -1
+            cidr_ip: "{{ vpc_cidr }}"
+          - proto: all
+            ports:
+              - -1
+            cidr_ip: "0.0.0.0/0"
+            rule_type: egress
+        state: present
+      register: private_sg
+
+    - name: Create IAM role for SSM
+      community.aws.iam_role:
+        name: "{{ project_name }}-ssm-role"
+        assume_role_policy_document: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ec2.amazonaws.com"
+                }
+              }
+            ]
+          }
+        region: "{{ aws_region }}"
+        state: present
+      register: ssm_role
+
+    - name: Attach SSM policy to role
+      community.aws.iam_role_policy_attachment:
+        role_name: "{{ ssm_role.role.role_name }}"
+        policy_arn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Create IAM instance profile
+      community.aws.iam_instance_profile:
+        name: "{{ project_name }}-ssm-profile"
+        role: "{{ ssm_role.role.role_name }}"
+        region: "{{ aws_region }}"
+        state: present
+      register: instance_profile
+
+    - name: Create bastion host
+      community.aws.ec2_instance:
+        name: "{{ project_name }}-bastion"
+        image_id: "{{ ubuntu_ami.images[0].image_id }}"
+        instance_type: "{{ instance_type }}"
+        key_name: "{{ key_name }}"
+        vpc_subnet_id: "{{ public_subnet.subnet.id }}"
+        security_groups:
+          - "{{ bastion_sg.group_id }}"
+        iam_instance_profile: "{{ instance_profile.instance_profile.instance_profile_name }}"
+        region: "{{ aws_region }}"
+        state: running
+        wait: true
+        wait_timeout: 300
+      register: bastion_instance
+
+    - name: Create private instance
+      community.aws.ec2_instance:
+        name: "{{ project_name }}-private"
+        image_id: "{{ ubuntu_ami.images[0].image_id }}"
+        instance_type: "{{ instance_type }}"
+        key_name: "{{ key_name }}"
+        vpc_subnet_id: "{{ private_subnet.subnet.id }}"
+        security_groups:
+          - "{{ private_sg.group_id }}"
+        iam_instance_profile: "{{ instance_profile.instance_profile.instance_profile_name }}"
+        region: "{{ aws_region }}"
+        state: running
+        wait: true
+        wait_timeout: 300
+      register: private_instance
+
+    - name: Wait for instances to be ready
+      community.aws.ec2_instance_info:
+        instance_ids:
+          - "{{ bastion_instance.instances[0].instance_id }}"
+          - "{{ private_instance.instances[0].instance_id }}"
+        region: "{{ aws_region }}"
+      register: instance_info
+      until: instance_info.instances | selectattr('state.name', 'equalto', 'running') | list | length == 2
+      retries: 30
+      delay: 10
+
+    - name: Create infrastructure inventory
+      template:
+        src: infrastructure_inventory.j2
+        dest: "{{ playbook_dir }}/inventory/infrastructure.ini"
+        mode: '0644'
+      vars:
+        bastion_ip: "{{ bastion_instance.instances[0].public_ip_address }}"
+        private_ip: "{{ private_instance.instances[0].private_ip_address }}"
+        vpc_id: "{{ vpc.vpc.id }}"
+
+    - name: Display connection information
+      debug:
+        msg: |
+          Infrastructure deployed successfully!
+          
+          Bastion Host:
+            Public IP: {{ bastion_instance.instances[0].public_ip_address }}
+            Private IP: {{ bastion_instance.instances[0].private_ip_address }}
+          
+          Private Instance:
+            Private IP: {{ private_instance.instances[0].private_ip_address }}
+          
+          VPC ID: {{ vpc.vpc.id }}
+          
+          Connection Commands:
+            SSH to Bastion: ssh -i ~/.ssh/id_rsa ubuntu@{{ bastion_instance.instances[0].public_ip_address }}
+            SSH to Private: ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@{{ bastion_instance.instances[0].public_ip_address }}' ubuntu@{{ private_instance.instances[0].private_ip_address }}
+
+

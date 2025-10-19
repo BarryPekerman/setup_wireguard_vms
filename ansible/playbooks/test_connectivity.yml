@@ -1,0 +1,49 @@
+---
+- name: Test SSH Connectivity and Tunneling
+  hosts: all
+  gather_facts: false
+  vars:
+    test_commands:
+      - "echo 'SSH connection successful'"
+      - "whoami"
+      - "hostname"
+      - "ip addr show"
+
+  tasks:
+    - name: Test basic SSH connectivity
+      command: "{{ item }}"
+      loop: "{{ test_commands }}"
+      register: connectivity_results
+      changed_when: false
+
+    - name: Display connectivity test results
+      debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          Command: {{ item.item }}
+          Result: {{ item.stdout }}
+      loop: "{{ connectivity_results.results }}"
+
+    - name: Test SSH tunneling for private instance
+      command: "echo 'SSH tunneling successful'"
+      delegate_to: "{{ hostvars['private']['ansible_host'] }}"
+      when: inventory_hostname == 'bastion'
+      register: tunneling_result
+
+    - name: Display tunneling test result
+      debug:
+        msg: "SSH tunneling from bastion to private instance: {{ tunneling_result.stdout }}"
+      when: inventory_hostname == 'bastion' and tunneling_result is defined
+
+    - name: Test network connectivity between instances
+      ping:
+        data: "Connectivity test from {{ inventory_hostname }}"
+      delegate_to: "{{ hostvars['private']['ansible_host'] }}"
+      when: inventory_hostname == 'bastion'
+
+    - name: Display network test result
+      debug:
+        msg: "Network connectivity between bastion and private instance: OK"
+      when: inventory_hostname == 'bastion'
+
+

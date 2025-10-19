@@ -1,0 +1,13 @@
+[Interface]
+PrivateKey = {{ server_private_key }}
+Address = {{ server_ip }}/24
+ListenPort = {{ wireguard_port }}
+SaveConfig = true
+
+# Enable IP forwarding and NAT
+PostUp = iptables -A FORWARD -i {{ wireguard_interface }} -j ACCEPT; iptables -A FORWARD -o {{ wireguard_interface }} -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i {{ wireguard_interface }} -j ACCEPT; iptables -D FORWARD -o {{ wireguard_interface }} -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+[Peer]
+PublicKey = {{ client_public_key }}
+AllowedIPs = {{ client_ip }}/32

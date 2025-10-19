@@ -1,0 +1,40 @@
+---
+# Security configuration with robust error handling
+# This file handles IP detection with multiple fallback methods
+
+# IP detection with error handling
+detected_public_ip: "{{ 
+  lookup('pipe', 'curl -s --connect-timeout 5 --max-time 10 ifconfig.me 2>/dev/null || echo FAIL') |
+  default(lookup('pipe', 'curl -s --connect-timeout 5 --max-time 10 ipinfo.io/ip 2>/dev/null || echo FAIL')) |
+  default(lookup('pipe', 'dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo FAIL')) |
+  default(lookup('pipe', 'wget -qO- --timeout=10 ifconfig.me 2>/dev/null || echo FAIL')) |
+  default('0.0.0.0')
+}}"
+
+# Validate IP format and set CIDRs
+allowed_ssh_cidrs: "{{ 
+  (detected_public_ip | ansible.utils.ipaddr) | 
+  ternary(detected_public_ip + '/32', '0.0.0.0/32')
+}}"
+
+allowed_wireguard_cidrs: "{{ 
+  (detected_public_ip | ansible.utils.ipaddr) | 
+  ternary(detected_public_ip + '/32', '0.0.0.0/32')
+}}"
+
+# Manual override variables (set these if auto-detection fails)
+manual_ssh_cidrs: ""  # Set to "YOUR_IP/32" if needed
+manual_wireguard_cidrs: ""  # Set to "YOUR_IP/32" if needed
+
+# Final CIDRs (manual override takes precedence)
+final_ssh_cidrs: "{{ 
+  manual_ssh_cidrs | 
+  default(allowed_ssh_cidrs)
+}}"
+
+final_wireguard_cidrs: "{{ 
+  manual_wireguard_cidrs | 
+  default(allowed_wireguard_cidrs)
+}}"
+
+

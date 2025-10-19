@@ -1,0 +1,87 @@
+---
+- name: Cleanup AWS Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aws_region: "{{ aws_region | default('us-west-2') }}"
+    project_name: "{{ project_name | default('wireguard-setup') }}"
+
+  tasks:
+    - name: Get instances by project name
+      community.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ project_name }}-*"
+      register: instances
+
+    - name: Terminate instances
+      community.aws.ec2_instance:
+        instance_ids: "{{ instances.instances | map(attribute='instance_id') | list }}"
+        region: "{{ aws_region }}"
+        state: absent
+        wait: true
+      when: instances.instances | length > 0
+
+    - name: Get security groups by project name
+      community.aws.ec2_group_info:
+        region: "{{ aws_region }}"
+        filters:
+          "group-name": "{{ project_name }}-*"
+      register: security_groups
+
+    - name: Delete security groups
+      community.aws.ec2_group:
+        group_id: "{{ item.group_id }}"
+        region: "{{ aws_region }}"
+        state: absent
+      loop: "{{ security_groups.security_groups }}"
+      when: security_groups.security_groups | length > 0
+
+    - name: Get VPCs by project name
+      community.aws.ec2_vpc_net_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ project_name }}-vpc"
+      register: vpcs
+
+    - name: Delete VPCs
+      community.aws.ec2_vpc_net:
+        vpc_id: "{{ item.vpc_id }}"
+        region: "{{ aws_region }}"
+        state: absent
+      loop: "{{ vpcs.vpcs }}"
+      when: vpcs.vpcs | length > 0
+
+    - name: Get IAM roles by project name
+      community.aws.iam_role_info:
+        region: "{{ aws_region }}"
+        name: "{{ project_name }}-*"
+      register: iam_roles
+
+    - name: Delete IAM instance profiles
+      community.aws.iam_instance_profile:
+        name: "{{ project_name }}-ssm-profile"
+        region: "{{ aws_region }}"
+        state: absent
+
+    - name: Delete IAM roles
+      community.aws.iam_role:
+        name: "{{ item.role_name }}"
+        region: "{{ aws_region }}"
+        state: absent
+      loop: "{{ iam_roles.roles }}"
+      when: iam_roles.roles | length > 0
+
+    - name: Display cleanup status
+      debug:
+        msg: |
+          🧹 Cleanup completed!
+          
+          Removed:
+          - {{ instances.instances | length }} instances
+          - {{ security_groups.security_groups | length }} security groups
+          - {{ vpcs.vpcs | length }} VPCs
+          - {{ iam_roles.roles | length }} IAM roles
+
+

@@ -1,0 +1,10 @@
+[Interface]
+PrivateKey = {{ client_private_key }}
+Address = {{ client_ip }}/24
+SaveConfig = true
+
+[Peer]
+PublicKey = {{ server_public_key }}
+AllowedIPs = 10.0.0.0/16
+Endpoint = {{ server_endpoint }}
+PersistentKeepalive = 25
