@@ -12,22 +12,7 @@ private_subnet_cidr: 10.0.2.0/24
 instance_type: t3.nano
 key_name: wireguard-key
 
-# Security configuration - Auto-detect your public IP with error handling
-# Try multiple methods with fallbacks for reliability
-allowed_ssh_cidrs: "{{ 
-  lookup('pipe', 'curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo FAIL') |
-  default(lookup('pipe', 'dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo FAIL')) |
-  default(lookup('pipe', 'wget -qO- --timeout=5 ifconfig.me 2>/dev/null || echo FAIL')) |
-  default('0.0.0.0')
-}}/32"
-
-allowed_wireguard_cidrs: "{{ 
-  lookup('pipe', 'curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo FAIL') |
-  default(lookup('pipe', 'dig +short myip.opendns.com @resolver1.opendns.com 2>/dev/null || echo FAIL')) |
-  default(lookup('pipe', 'wget -qO- --timeout=5 ifconfig.me 2>/dev/null || echo FAIL')) |
-  default('0.0.0.0')
-}}/32"
-
+# Security configuration - Auto-detect your public IP
 # Manual override (uncomment and set your IP if auto-detection fails):
 # allowed_ssh_cidrs: "203.0.113.0/24"  # Replace with your IP/network
 # allowed_wireguard_cidrs: "203.0.113.0/24"  # Replace with your IP/network

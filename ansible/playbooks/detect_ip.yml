@@ -3,72 +3,44 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars:
-    ip_detection_methods:
-      - "curl -s --connect-timeout 5 --max-time 10 ifconfig.me"
-      - "curl -s --connect-timeout 5 --max-time 10 ipinfo.io/ip"
-      - "dig +short myip.opendns.com @resolver1.opendns.com"
-      - "wget -qO- --timeout=10 ifconfig.me"
-      - "curl -s --connect-timeout 5 --max-time 10 icanhazip.com"
 
   tasks:
-    - name: Try to detect public IP
-      shell: "{{ item }}"
+    - name: Detect public IP using external script
+      shell: "{{ playbook_dir }}/../scripts/detect_ip.sh"
       register: ip_result
       failed_when: false
       changed_when: false
-      loop: "{{ ip_detection_methods }}"
-      until: ip_result.stdout is defined and ip_result.stdout != "" and ip_result.stdout != "FAIL"
-      retries: 1
-      delay: 2
 
-    - name: Validate IP address format
+    - name: Fail if IP detection failed
+      fail:
+        msg: |
+          🚨 IP Detection Failed!
+          
+          The system could not detect your public IP address.
+          This is required for secure SSH and WireGuard access.
+          
+          To fix this:
+          1. Check your internet connection
+          2. Try running the setup again
+          3. Or manually set your IP in ansible/group_vars/all.yml:
+             allowed_ssh_cidrs: "YOUR_IP/32"
+             allowed_wireguard_cidrs: "YOUR_IP/32"
+          
+          Example:
+             allowed_ssh_cidrs: "203.0.113.10/32"
+             allowed_wireguard_cidrs: "203.0.113.10/32"
+      when: ip_result.rc != 0
+
+    - name: Set detected IP variables
       set_fact:
         detected_ip: "{{ ip_result.stdout | regex_replace('\\s+', '') }}"
-      when: ip_result.stdout is defined and ip_result.stdout != ""
+        allowed_ssh_cidrs: "{{ ip_result.stdout | regex_replace('\\s+', '') }}/32"
+        allowed_wireguard_cidrs: "{{ ip_result.stdout | regex_replace('\\s+', '') }}/32"
+        public_ip_detected: true
 
-    - name: Check if IP is valid
-      set_fact:
-        is_valid_ip: "{{ detected_ip | ansible.utils.ipaddr }}"
-      when: detected_ip is defined
-
-    - name: Set fallback IP if detection failed
-      set_fact:
-        detected_ip: "0.0.0.0"
-        is_valid_ip: false
-      when: detected_ip is not defined or is_valid_ip is not defined
-
-    - name: Display detected IP
-      debug:
-        msg: |
-          Public IP Detection Results:
-          - Detected IP: {{ detected_ip }}
-          - Valid IP: {{ is_valid_ip | default('false') }}
-          - Method used: {{ item.item if item is defined else 'fallback' }}
-      when: item is defined
-
-    - name: Set final IP variables
-      set_fact:
-        allowed_ssh_cidrs: "{{ detected_ip }}/32"
-        allowed_wireguard_cidrs: "{{ detected_ip }}/32"
-        public_ip_detected: "{{ is_valid_ip | default(false) }}"
-
-    - name: Warning if IP detection failed
-      debug:
-        msg: |
-          ⚠️  WARNING: Could not detect your public IP!
-          - Using fallback: 0.0.0.0/32 (ALLOWS ALL IPs - NOT SECURE!)
-          - Please manually set your IP in group_vars/all.yml:
-          - allowed_ssh_cidrs: "YOUR_IP/32"
-          - allowed_wireguard_cidrs: "YOUR_IP/32"
-      when: not (is_valid_ip | default(false))
-
-    - name: Success message
+    - name: Display success message
       debug:
         msg: |
           ✅ Successfully detected your public IP: {{ detected_ip }}
           - SSH access will be restricted to: {{ allowed_ssh_cidrs }}
           - WireGuard access will be restricted to: {{ allowed_wireguard_cidrs }}
-      when: is_valid_ip | default(false)
-
-

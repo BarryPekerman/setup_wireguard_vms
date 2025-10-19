@@ -10,11 +10,6 @@
   tasks:
     - name: Detect public IP with error handling
       include: detect_ip.yml
-
-    - name: Set final security variables
-      set_fact:
-        allowed_ssh_cidrs: "{{ final_ssh_cidrs | default('0.0.0.0/32') }}"
-        allowed_wireguard_cidrs: "{{ final_wireguard_cidrs | default('0.0.0.0/32') }}"
     - name: Deploy AWS Infrastructure
       include: infrastructure.yml
       vars:
