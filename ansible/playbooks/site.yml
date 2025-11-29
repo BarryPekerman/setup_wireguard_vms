@@ -4,14 +4,14 @@
   connection: local
   gather_facts: false
   vars:
-    aws_region: "{{ aws_region | default('us-west-2') }}"
+    aws_region: "{{ aws_region | default('eu-north-1') }}"
     project_name: "{{ project_name | default('wireguard-setup') }}"
 
   tasks:
     - name: Detect public IP with error handling
-      include: detect_ip.yml
+      include_tasks: detect_ip.yml
     - name: Deploy AWS Infrastructure
-      include: infrastructure.yml
+      include_tasks: infrastructure.yml
       vars:
         aws_region: "{{ aws_region }}"
         project_name: "{{ project_name }}"
@@ -24,12 +24,12 @@
         prompt: "Waiting for instances to be fully ready..."
 
     - name: Configure WireGuard on instances
-      include: wireguard.yml
+      include_tasks: wireguard.yml
       vars:
         inventory_file: "{{ playbook_dir }}/inventory/infrastructure.ini"
 
     - name: Test SSH connectivity and tunneling
-      include: test_connectivity.yml
+      include_tasks: test_connectivity.yml
       vars:
         inventory_file: "{{ playbook_dir }}/inventory/infrastructure.ini"
 

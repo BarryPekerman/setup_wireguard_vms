@@ -7,7 +7,7 @@ This directory contains a complete **SSH tunneling** solution for deploying Wire
 - **Creates AWS Infrastructure**: VPC, subnets, security groups, instances
 - **Configures SSH Tunneling**: Bastion host access to private instances
 - **Configures WireGuard**: Automated VPN setup between instances
-- **Sets up Security**: UFW firewall, fail2ban, SSH key authentication
+- **Sets up Security**: SSH key authentication
 - **Tests Connectivity**: SSH tunneling and WireGuard validation
 - **Provides Cleanup**: Easy infrastructure removal
 
@@ -39,7 +39,6 @@ ansible/
 ├── templates/                 # Configuration templates
 │   ├── server.conf.j2        # WireGuard server config
 │   ├── client.conf.j2        # WireGuard client config
-│   ├── fail2ban.conf.j2      # Fail2ban configuration
 │   └── infrastructure_inventory.j2
 ├── inventory/                # Dynamic inventory
 │   ├── localhost.ini         # Local execution
@@ -63,7 +62,7 @@ ansible-galaxy collection install -r requirements.yml
 ### **Step 2: Deploy Infrastructure**
 ```bash
 ansible-playbook playbooks/infrastructure.yml \
-  -e "aws_region=us-west-2" \
+  -e "aws_region=eu-north-1" \
   -e "project_name=wireguard-setup"
 ```
 
@@ -127,7 +126,7 @@ ping 10.0.3.2  # From bastion to private
 
 ### **Environment Variables:**
 ```bash
-export AWS_REGION=us-west-2
+export AWS_REGION=eu-north-1
 export PROJECT_NAME=wireguard-setup
 export ALLOWED_SSH_CIDRS=203.0.113.0/24
 export ALLOWED_WIREGUARD_CIDRS=203.0.113.0/24
@@ -136,7 +135,7 @@ export ALLOWED_WIREGUARD_CIDRS=203.0.113.0/24
 ### **Group Variables:**
 Edit `group_vars/all.yml`:
 ```yaml
-aws_region: us-west-2
+aws_region: eu-north-1
 project_name: wireguard-setup
 allowed_ssh_cidrs: "203.0.113.0/24"  # Your office IP
 allowed_wireguard_cidrs: "203.0.113.0/24"  # Your office IP

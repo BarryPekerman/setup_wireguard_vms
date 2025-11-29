@@ -47,7 +47,7 @@ show_help() {
     echo "Usage:"
     echo "  $0                 # Quick cleanup (default)"
     echo "  $0 --full          # Full cleanup including local WireGuard"
-    echo "  $0 --ultra         # Ultra cleanup (removes everything including backups)"
+    echo "  $0 --ultra         # Ultra cleanup (removes everything including system files)"
     echo "  $0 --dry-run       # Show what would be destroyed (safe)"
     echo "  $0 --help          # Show this help"
     echo
@@ -63,11 +63,10 @@ show_help() {
     echo "    - Removes WireGuard config from system"
     echo "    - Cleans up SSH config entries"
     echo
-    echo "  Ultra Mode (--ultra):"
-    echo "    - Does everything in Full Mode"
-    echo "    - Removes backup files"
-    echo "    - Removes remaining WireGuard configs"
-    echo "    - Complete system cleanup"
+  echo "  Ultra Mode (--ultra):"
+  echo "    - Does everything in Full Mode"
+  echo "    - Removes remaining WireGuard configs"
+  echo "    - Complete system cleanup"
     echo
     echo "  Dry-Run Mode (--dry-run):"
     echo "    - Shows what would be destroyed"
@@ -117,26 +116,6 @@ check_directory() {
 }
 
 # Backup important files
-backup_files() {
-    print_header "Creating backup of important files..."
-    
-    local backup_dir="backup_$(date +%Y%m%d_%H%M%S)"
-    mkdir -p "$backup_dir"
-    
-    # Backup local WireGuard config if it exists
-    if [[ -f "local_wg0.conf" ]]; then
-        cp local_wg0.conf "$backup_dir/"
-        print_status "Backed up local_wg0.conf to $backup_dir/"
-    fi
-    
-    # Backup SSH config if it exists
-    if [[ -f "ssh_config" ]]; then
-        cp ssh_config "$backup_dir/"
-        print_status "Backed up ssh_config to $backup_dir/"
-    fi
-    
-    print_success "Backup created in $backup_dir/"
-}
 
 # Destroy AWS infrastructure
 destroy_infrastructure() {
@@ -153,6 +132,13 @@ destroy_infrastructure() {
     
     # Check if there are any resources to destroy
     print_status "Checking for resources to destroy..."
+    
+    # Handle case where SSH key files are missing (already deleted). We should
+    # still prefer Terraform-native destroy and only fall back to AWS CLI if
+    # there is no Terraform state at all. Since we already confirmed
+    # terraform.tfstate exists, skip the manual AWS termination path here and
+    # let terraform plan/destroy handle drift.
+    
     if ! terraform plan -destroy -detailed-exitcode &> /dev/null; then
         local exit_code=$?
         if [[ $exit_code -eq 0 ]]; then
@@ -189,11 +175,17 @@ destroy_infrastructure() {
     
     cd ..
     print_success "AWS infrastructure destroyed"
+    
+    # Now that terraform destroy is complete, clean up SSH keys
+    print_status "Cleaning up SSH keys after infrastructure destruction..."
+    cleanup_project_ssh_keys
 }
 
 # Clean up local files
 cleanup_local_files() {
     print_header "Cleaning up local files..."
+    
+    # Note: SSH keys are cleaned up in destroy_infrastructure() after terraform destroy
     
     # Remove local WireGuard config
     if [[ -f "local_wg0.conf" ]]; then
@@ -323,8 +315,6 @@ show_cleanup_commands() {
     print_command "5. Clean up project files:"
     echo "rm -f local_wg0.conf ssh_config"
     echo
-    print_command "6. Remove backup directory:"
-    echo "rm -rf backup_*"
 }
 
 # Show full cleanup completion
@@ -339,9 +329,6 @@ show_full_completion() {
     echo "✓ SSH config entries cleaned"
     echo "✓ Local files removed"
     echo
-    print_command "Backup files are available in: backup_*"
-    print_command "You can safely remove them when ready:"
-    echo "rm -rf backup_*"
     echo
     print_command "Optional: Remove remaining WireGuard configs:"
     echo "sudo rm -f /etc/wireguard/wg0.conf /etc/wireguard/local_wg0.conf"
@@ -353,7 +340,6 @@ quick_mode() {
     echo
     
     check_directory
-    backup_files
     destroy_infrastructure
     cleanup_local_files
     show_cleanup_commands
@@ -367,7 +353,6 @@ full_mode() {
     echo
     
     check_directory
-    backup_files
     destroy_infrastructure
     cleanup_local_files
     cleanup_wireguard
@@ -379,28 +364,15 @@ full_mode() {
 
 # Ultra mode
 ultra_mode() {
-    print_status "Running in Ultra Mode - complete cleanup including backups and system files"
+    print_status "Running in Ultra Mode - complete cleanup including system files"
     echo
     
     check_directory
-    backup_files
     destroy_infrastructure
     cleanup_local_files
     cleanup_wireguard
     cleanup_ssh_config
     
-    # Remove backup files
-    print_header "Removing backup files..."
-    if [[ -d "backup_"* ]]; then
-        if ! confirm_action "Remove backup files? This cannot be undone."; then
-            print_warning "Skipping backup removal"
-        else
-            rm -rf backup_*
-            print_status "Removed backup files"
-        fi
-    else
-        print_status "No backup files found"
-    fi
     
     # Remove remaining WireGuard configs
     print_header "Removing remaining WireGuard configs..."
@@ -491,17 +463,72 @@ dry_run_mode() {
         echo "  - /etc/wireguard/local_wg0.conf"
     fi
     
-    print_command "Backup files that would be removed:"
-    if [[ -d "backup_"* ]]; then
-        echo "  - backup_* directories"
-    else
-        echo "  - No backup files found"
-    fi
     
     echo
     print_success "=== DRY-RUN COMPLETED ==="
     print_command "No actual changes were made. This was a safe preview."
     print_command "To perform actual cleanup, run without --dry-run flag."
+}
+
+# Clean up project-specific SSH keys
+cleanup_project_ssh_keys() {
+    print_status "Cleaning up project-specific SSH keys..."
+    
+    # Look for keys created by this project
+    # 1) Legacy timestamped keys (wireguard-*-<10-digit-timestamp>)
+    local key_pattern="wireguard-*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
+    local keys_found=false
+    local keys_to_remove=()
+    
+    # 2) Current stable key path from terraform.tfvars (if present)
+    if [[ -f "terraform/terraform.tfvars" ]]; then
+        local tf_private_path
+        tf_private_path=$(grep -E '^private_key_path\s*=' terraform/terraform.tfvars | sed 's/.*=\s*"\(.*\)".*/\1/' || true)
+        if [[ -n "${tf_private_path:-}" ]]; then
+            if [[ -f "$tf_private_path" ]]; then
+                keys_to_remove+=("$tf_private_path")
+                keys_found=true
+            fi
+            if [[ -f "${tf_private_path}.pub" ]]; then
+                keys_to_remove+=("${tf_private_path}.pub")
+                keys_found=true
+            fi
+        fi
+    fi
+    
+    # Find legacy timestamp-based keys in ~/.ssh
+    for key_file in ~/.ssh/${key_pattern}; do
+        if [ -f "$key_file" ]; then
+            keys_to_remove+=("$key_file")
+            keys_found=true
+        fi
+    done
+    
+    for key_file in ~/.ssh/${key_pattern}.pub; do
+        if [ -f "$key_file" ]; then
+            keys_to_remove+=("$key_file")
+            keys_found=true
+        fi
+    done
+    
+    if [ "$keys_found" = true ]; then
+        print_status "Found project-specific SSH keys:"
+        for key_file in "${keys_to_remove[@]}"; do
+            print_status "  - $(basename "$key_file")"
+        done
+        
+        if confirm_action "Remove these project-specific SSH keys?"; then
+            for key_file in "${keys_to_remove[@]}"; do
+                print_status "Removing: $(basename "$key_file")"
+                rm -f "$key_file"
+            done
+            print_success "Project-specific SSH keys cleaned up"
+        else
+            print_warning "Skipping SSH key cleanup"
+        fi
+    else
+        print_status "No project-specific SSH keys found"
+    fi
 }
 
 # Main execution

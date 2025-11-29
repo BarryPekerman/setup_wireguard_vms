@@ -75,6 +75,20 @@ check_wireguard() {
     fi
 }
 
+# Determine which SSH key to use for connecting to bastion. Prefer the
+# project-specific key path from terraform.tfvars, with a sane fallback to
+# the stable default path used by setup.sh.
+get_ssh_key_path() {
+    local key_path=""
+    if [[ -f terraform/terraform.tfvars ]]; then
+        key_path=$(grep -E '^private_key_path\s*=' terraform/terraform.tfvars | sed 's/.*=\s*"\(.*\)".*/\1/' || true)
+    fi
+    if [[ -z "$key_path" ]]; then
+        key_path="$HOME/.ssh/wireguard-wireguard-setup"
+    fi
+    echo "$key_path"
+}
+
 # Get infrastructure details from Terraform
 get_infrastructure_info() {
     print_header "Getting infrastructure information from Terraform..."
@@ -99,7 +113,10 @@ get_infrastructure_info() {
 get_server_public_key() {
     print_header "Getting server public key from bastion..."
     
-    SERVER_PUBLIC_KEY=$(ssh -i terraform/keys/wireguard_key -o StrictHostKeyChecking=no -o IdentitiesOnly=yes ubuntu@$BASTION_PUBLIC_IP "sudo cat /etc/wireguard/wg0_public_key")
+    local ssh_key
+    ssh_key=$(get_ssh_key_path)
+    
+    SERVER_PUBLIC_KEY=$(ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o IdentitiesOnly=yes ubuntu@$BASTION_PUBLIC_IP "sudo cat /etc/wireguard/wg0_public_key")
     
     if [[ -z "$SERVER_PUBLIC_KEY" ]]; then
         print_error "Could not get server public key from bastion"
@@ -146,7 +163,10 @@ EOF
 add_client_to_server() {
     print_header "Adding local client to server configuration..."
     
-    ssh -i terraform/keys/wireguard_key -o StrictHostKeyChecking=no -o IdentitiesOnly=yes ubuntu@$BASTION_PUBLIC_IP "sudo wg set wg0 peer $LOCAL_PUBLIC_KEY allowed-ips 10.0.3.3/32"
+    local ssh_key
+    ssh_key=$(get_ssh_key_path)
+    
+    ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o IdentitiesOnly=yes ubuntu@$BASTION_PUBLIC_IP "sudo wg set wg0 peer $LOCAL_PUBLIC_KEY allowed-ips 10.0.3.3/32"
     
     print_success "Added local client to server"
 }
@@ -191,6 +211,8 @@ test_connectivity() {
 
 # Display connection commands (quick mode)
 show_connection_commands() {
+    local ssh_key
+    ssh_key=$(get_ssh_key_path)
     echo
     print_command "=== WIREGUARD SETUP COMPLETE ==="
     echo
@@ -199,10 +221,10 @@ show_connection_commands() {
     echo "sudo wg-quick up wg0"
     echo
     print_command "2. SSH to bastion:"
-    echo "ssh -i terraform/keys/wireguard_key -o IdentitiesOnly=yes ubuntu@10.0.3.1"
+    echo "ssh -i \"$ssh_key\" -o IdentitiesOnly=yes ubuntu@10.0.3.1"
     echo
     print_command "3. SSH to private instance:"
-    echo "ssh -i terraform/keys/wireguard_key -o IdentitiesOnly=yes ubuntu@10.0.3.2"
+    echo "ssh -i \"$ssh_key\" -o IdentitiesOnly=yes ubuntu@10.0.3.2"
     echo
     print_command "4. Check WireGuard status:"
     echo "sudo wg show"
@@ -216,14 +238,16 @@ show_connection_commands() {
 
 # Display auto mode completion
 show_auto_completion() {
+    local ssh_key
+    ssh_key=$(get_ssh_key_path)
     echo
     print_success "=== WIREGUARD VPN IS NOW ACTIVE ==="
     echo
     print_command "SSH to bastion:"
-    echo "ssh -i terraform/keys/wireguard_key -o IdentitiesOnly=yes ubuntu@10.0.3.1"
+    echo "ssh -i \"$ssh_key\" -o IdentitiesOnly=yes ubuntu@10.0.3.1"
     echo
     print_command "SSH to private instance:"
-    echo "ssh -i terraform/keys/wireguard_key -o IdentitiesOnly=yes ubuntu@10.0.3.2"
+    echo "ssh -i \"$ssh_key\" -o IdentitiesOnly=yes ubuntu@10.0.3.2"
     echo
     print_command "Check WireGuard status:"
     echo "sudo wg show"

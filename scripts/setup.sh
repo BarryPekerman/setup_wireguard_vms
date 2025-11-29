@@ -129,6 +129,59 @@ check_prerequisites() {
     print_status "All prerequisites met!"
 }
 
+
+# Create project-specific SSH key pair
+create_project_ssh_key() {
+    print_status "Creating project-specific SSH key pair..."
+    
+    # Use a stable key name so repeated runs reuse the same key instead of
+    # creating a new timestamped key each time (which breaks SSH/Ansible).
+    local base_name="${PROJECT_NAME:-wireguard-setup}"
+    local key_name="wireguard-${base_name}"
+    local key_path="${HOME}/.ssh/${key_name}"
+    local timestamp
+    timestamp=$(date +%s)
+    local comment="wireguard-setup-$(date +%Y%m%d)-${timestamp}"
+    
+    # Check if key already exists; if so, reuse it
+    if [ -f "${key_path}" ]; then
+        print_warning "SSH key already exists: ${key_name}"
+        print_status "Using existing key"
+        export PROJECT_PRIVATE_KEY_PATH="${key_path}"
+        export PROJECT_PUBLIC_KEY_PATH="${key_path}.pub"
+        # Ensure Terraform variables point at this stable key path
+        if [ -f terraform/terraform.tfvars ]; then
+            sed -i "s|^public_key_path .*|public_key_path = \"${key_path}.pub\"|" terraform/terraform.tfvars || true
+            sed -i "s|^private_key_path .*|private_key_path = \"${key_path}\"|" terraform/terraform.tfvars || true
+        fi
+        return 0
+    fi
+    
+    # Create SSH key pair (stable path)
+    if ssh-keygen -t rsa -b 4096 -f "${key_path}" -N "" -C "${comment}"; then
+        print_success "SSH key pair created: ${key_name}"
+        print_status "Private key: ${key_path}"
+        print_status "Public key: ${key_path}.pub"
+        print_status "Comment: ${comment}"
+        
+        # Set environment variables for Terraform
+        export PROJECT_PRIVATE_KEY_PATH="${key_path}"
+        export PROJECT_PUBLIC_KEY_PATH="${key_path}.pub"
+        
+        # Update Terraform variables (replace existing values) so that the
+        # aws_key_pair resource and generated Ansible inventory stay in sync
+        if [ -f terraform/terraform.tfvars ]; then
+            sed -i "s|^public_key_path .*|public_key_path = \"${key_path}.pub\"|" terraform/terraform.tfvars || true
+            sed -i "s|^private_key_path .*|private_key_path = \"${key_path}\"|" terraform/terraform.tfvars || true
+        fi
+        
+        return 0
+    else
+        print_error "Failed to create SSH key pair"
+        return 1
+    fi
+}
+
 # Deploy infrastructure with retry logic
 deploy_infrastructure() {
     print_status "Deploying AWS infrastructure..."
@@ -157,31 +210,11 @@ deploy_infrastructure() {
         fi
     done
     
-    # Plan with retry
-    retry_count=0
-    while [ $retry_count -lt $max_retries ]; do
-        print_status "Planning Terraform deployment (attempt $((retry_count + 1))/$max_retries)..."
-        if terraform plan -out=tfplan; then
-            print_success "Terraform plan successful"
-            break
-        else
-            retry_count=$((retry_count + 1))
-            if [ $retry_count -lt $max_retries ]; then
-                print_warning "Terraform plan failed, retrying in 30 seconds..."
-                sleep 30
-            else
-                print_error "Terraform plan failed after $max_retries attempts"
-                cd ..
-                return 1
-            fi
-        fi
-    done
-    
-    # Apply with retry
+    # Apply with retry (no saved plan file to avoid staleness issues)
     retry_count=0
     while [ $retry_count -lt $max_retries ]; do
         print_status "Applying Terraform deployment (attempt $((retry_count + 1))/$max_retries)..."
-        if terraform apply -auto-approve tfplan; then
+        if terraform apply -auto-approve; then
             print_success "Infrastructure deployed successfully"
             break
         else
@@ -278,6 +311,10 @@ run_ansible() {
 test_connection() {
     print_status "Testing WireGuard connection..."
     
+    # Prefer the project-specific SSH key created earlier, with a sane
+    # fallback to the stable default path if the env var is missing.
+    local ssh_key="${PROJECT_PRIVATE_KEY_PATH:-$HOME/.ssh/wireguard-wireguard-setup}"
+    
     # Test bastion connectivity
     if ping -c 3 $BASTION_IP &> /dev/null; then
         print_status "Bastion host is reachable"
@@ -287,7 +324,7 @@ test_connection() {
     fi
     
     # Test private instance via bastion
-    if ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o ProxyCommand="ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@$BASTION_IP" ubuntu@$PRIVATE_IP "echo 'Private instance reachable'" &> /dev/null; then
+    if ssh -i "$ssh_key" -o ConnectTimeout=10 -o ProxyCommand="ssh -i \"$ssh_key\" -W %h:%p ubuntu@$BASTION_IP" ubuntu@$PRIVATE_IP "echo 'Private instance reachable'" &> /dev/null; then
         print_status "Private instance is reachable via bastion"
     else
         print_warning "Cannot reach private instance via bastion"
@@ -296,17 +333,24 @@ test_connection() {
 
 # Cleanup function for failed deployments
 cleanup_on_failure() {
-    print_error "Setup failed! Cleaning up resources..."
-    
+    print_error "Setup failed!"
     if [ -d "terraform" ] && [ -f "terraform/terraform.tfstate" ]; then
-        print_warning "Destroying partially created infrastructure..."
-        cd terraform
-        terraform destroy -auto-approve || print_warning "Terraform destroy failed, manual cleanup may be required"
-        cd ..
+        print_warning "Infrastructure may be partially created."
+        read -r -p "Do you want to destroy the infrastructure now? [y/N]: " reply
+        reply=${reply:-N}
+        case "$reply" in
+            [yY][eE][sS]|[yY])
+                print_warning "Destroying infrastructure..."
+                cd terraform
+                terraform destroy -auto-approve || print_warning "Terraform destroy failed, manual cleanup may be required"
+                cd ..
+                ;;
+            *)
+                print_status "Skipping destroy to allow debugging. You can run './scripts/cleanup.sh' later."
+                ;;
+        esac
     fi
-    
     print_error "Setup failed. Check the logs above for details."
-    print_status "You can try running the setup again or use './scripts/cleanup.sh' to clean up any remaining resources."
     exit 1
 }
 
@@ -325,6 +369,11 @@ main() {
     
     if ! detect_local_ip; then
         print_error "IP detection failed"
+        exit 1
+    fi
+    
+    if ! create_project_ssh_key; then
+        print_error "SSH key creation failed"
         exit 1
     fi
     
@@ -360,9 +409,12 @@ main() {
     # Clear error trap on success
     trap - ERR
     
+    # Use the same project-specific SSH key that Terraform/Ansible used
+    local ssh_key="${PROJECT_PRIVATE_KEY_PATH:-$HOME/.ssh/wireguard-wireguard-setup}"
+    
     print_success "Setup completed successfully!"
     print_status "You can now connect to the private instance via:"
-    print_status "ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@$BASTION_IP' ubuntu@$PRIVATE_IP"
+    print_status "ssh -i \"$ssh_key\" -o ProxyCommand='ssh -i \"$ssh_key\" -W %h:%p ubuntu@$BASTION_IP' ubuntu@$PRIVATE_IP"
     print_status ""
     print_status "To set up WireGuard VPN for direct access:"
     print_status "./scripts/wireguard_client.sh           # Quick config generation (recommended)"

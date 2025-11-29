@@ -90,13 +90,7 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = [local.ssh_cidr_effective]
   }
 
-  # WireGuard port - restricted to your IP only
-  ingress {
-    from_port   = 51820
-    to_port     = 51820
-    protocol    = "udp"
-    cidr_blocks = [local.ssh_cidr_effective]
-  }
+  # WireGuard port is handled by a dedicated SG to avoid dependency cycles
 
   egress {
     from_port   = 0
@@ -115,7 +109,7 @@ resource "aws_security_group" "private_sg" {
   name_prefix = "${var.project_name}-private-"
   vpc_id      = module.vpc.vpc_id
 
-  # SSH access from bastion host
+  # SSH access from bastion host public SG
   ingress {
     from_port       = 22
     to_port         = 22
@@ -123,13 +117,7 @@ resource "aws_security_group" "private_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  # WireGuard port - restricted to bastion host only
-  ingress {
-    from_port       = 51820
-    to_port         = 51820
-    protocol        = "udp"
-    security_groups = [aws_security_group.bastion_sg.id]
-  }
+  # Note: WireGuard server listens on bastion only; no UDP 51820 inbound needed here
 
   # Allow all traffic from VPC
   ingress {
@@ -151,10 +139,49 @@ resource "aws_security_group" "private_sg" {
   }
 }
 
+# Separate SG for WireGuard on bastion to break SG reference cycles
+resource "aws_security_group" "bastion_wg_sg" {
+  name_prefix = "${var.project_name}-bastion-wg-"
+  vpc_id      = module.vpc.vpc_id
+
+  # Allow WireGuard from:
+  # 1) Private instances' security group (intra-VPC VPN)
+  # 2) The caller's IP (local laptop) so it can join the VPN directly
+  ingress {
+    from_port       = 51820
+    to_port         = 51820
+    protocol        = "udp"
+    security_groups = [aws_security_group.private_sg.id]
+  }
+
+  ingress {
+    from_port   = 51820
+    to_port     = 51820
+    protocol    = "udp"
+    cidr_blocks = [local.ssh_cidr_effective]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-bastion-wg-sg"
+  }
+}
+
+# Check if SSH key files exist
+data "local_file" "public_key" {
+  filename = var.public_key_path
+}
+
 # Key Pair
 resource "aws_key_pair" "wireguard_key" {
   key_name   = "${var.project_name}-key"
-  public_key = file(var.public_key_path)
+  public_key = data.local_file.public_key.content
 
   tags = {
     Name = "${var.project_name}-key"
@@ -169,9 +196,9 @@ resource "aws_instance" "bastion" {
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.wireguard_key.key_name
   subnet_id                   = module.vpc.public_subnets[0]
-  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id, aws_security_group.bastion_wg_sg.id]
   associate_public_ip_address = true
-  source_dest_check           = false
+  source_dest_check           = true
 
   tags = {
     Name = "${var.project_name}-bastion"

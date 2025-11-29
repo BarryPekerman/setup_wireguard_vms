@@ -72,7 +72,7 @@ run_setup() {
     
     # Run the main site playbook
     ansible-playbook playbooks/site.yml \
-        -e "aws_region=${AWS_REGION:-us-west-2}" \
+        -e "aws_region=${AWS_REGION:-eu-north-1}" \
         -e "project_name=${PROJECT_NAME:-wireguard-setup}" \
         -e "allowed_ssh_cidrs=${ALLOWED_SSH_CIDRS:-0.0.0.0/0}" \
         -e "allowed_wireguard_cidrs=${ALLOWED_WIREGUARD_CIDRS:-0.0.0.0/0}" \
@@ -107,7 +107,7 @@ show_usage() {
     print_header "Usage Information"
     
     echo "Environment Variables:"
-    echo "  AWS_REGION              - AWS region (default: us-west-2)"
+    echo "  AWS_REGION              - AWS region (default: eu-north-1)"
     echo "  PROJECT_NAME            - Project name (default: wireguard-setup)"
     echo "  ALLOWED_SSH_CIDRS       - SSH access CIDRs (default: 0.0.0.0/0)"
     echo "  ALLOWED_WIREGUARD_CIDRS - WireGuard access CIDRs (default: 0.0.0.0/0)"

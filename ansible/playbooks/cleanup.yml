@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   vars:
-    aws_region: "{{ aws_region | default('us-west-2') }}"
+    aws_region: "{{ aws_region | default('eu-north-1') }}"
     project_name: "{{ project_name | default('wireguard-setup') }}"
 
   tasks:
