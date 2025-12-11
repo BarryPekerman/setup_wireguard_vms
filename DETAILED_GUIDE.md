@@ -1,6 +1,8 @@
 # WireGuard AWS Setup - Detailed Guide
 
-Comprehensive documentation for the WireGuard AWS Remote Setup project.
+Comprehensive documentation for the WireGuard AWS Showcase Project - a learning project demonstrating DevOps practices and tools.
+
+> ⚠️ **Note:** This is a **showcase/learning project** for demonstrating DevOps skills. Not intended for production use without additional hardening.
 
 ## 📁 Project Structure
 
@@ -52,51 +54,50 @@ setup-wireguard-remote/
 - **Security Groups**: Restrictive access controls
 - **WireGuard Encryption**: Modern, secure VPN protocol
 - **Key-based Authentication**: SSH key pairs for access
-- **Fail2ban**: Protection against brute force attacks
 - **Dynamic IP Detection**: Automatic SSH access restriction to your public IP only
 - **No Open SSH**: Bastion host SSH access is restricted to your detected public IP
 - **Restricted WireGuard**: WireGuard port access limited to your IP only
-- **SSH Hardening**: Enhanced SSH security with fail2ban and secure configurations
 - **Retry Logic**: Automatic retry mechanisms for improved reliability
+- **Error Handling**: Comprehensive error handling and cleanup procedures
 
 ## 📊 Three-Tier Automation System
 
 ### Setup Tiers
 | Tier  | Description                    | Use Case                |
 |-------|--------------------------------|-------------------------|
-| Quick | Config generation + commands   | Development, learning   |
-| Auto  | Full automation                | Production, convenience |
+| Quick | Config generation + commands   | Learning, understanding  |
+| Auto  | Full automation                | Demonstration, testing   |
 
 ### Cleanup Tiers
 | Tier  | Description                    | Use Case                |
 |-------|--------------------------------|-------------------------|
-| Quick | Infrastructure + local files  | Development, testing     |
-| Full  | Including local WireGuard      | Production cleanup      |
-| Ultra | Complete system cleanup        | Complete reset          |
+| Quick | Infrastructure + local files  | Learning, testing       |
+| Full  | Including local WireGuard      | Complete demo cleanup   |
+| Ultra | Complete system cleanup        | Full reset              |
 
 ## 🔄 Workflow Examples
 
-### Development Workflow
+### Learning/Demo Workflow
 ```bash
 # Setup
 ./scripts/setup.sh
 ./scripts/wireguard_client.sh
 
-# Test and develop
+# Test and explore
 # ... work with VPN ...
 
 # Cleanup
 ./scripts/cleanup.sh
 ```
 
-### Production Workflow
+### Automated Demo Workflow
 ```bash
 # Setup
 ./scripts/setup.sh
 ./scripts/wireguard_client.sh --auto
 
-# Production use
-# ... work with VPN ...
+# Demonstrate functionality
+# ... showcase VPN ...
 
 # Cleanup
 ./scripts/cleanup.sh --full
@@ -108,8 +109,8 @@ setup-wireguard-remote/
 ./scripts/setup.sh
 ./scripts/wireguard_client.sh --auto
 
-# Production use
-# ... work with VPN ...
+# Full demonstration
+# ... showcase all features ...
 
 # Complete cleanup
 ./scripts/cleanup.sh --ultra
@@ -219,31 +220,31 @@ The project includes a comprehensive cleanup script with three modes:
 | System Configs      | ❌           | ❌           | ✅           |
 | Recovery Possible   | ✅           | ✅           | ❌           |
 
-## 🔒 Security Considerations
+## 🔒 Security Considerations (For Production Use)
 
-### Critical Security Issues to Address:
+> **Note:** This project demonstrates basic security practices. For production deployments, additional hardening would be required.
 
-1. **Restrict SSH Access**: Limit to your office/home IPs
+### Security Features Demonstrated:
+1. **Network Segmentation**: VPC with public/private subnets
+2. **Security Groups**: Restrictive access controls
+3. **Dynamic IP Detection**: Automatic SSH access restriction
+4. **Key-based Authentication**: SSH key pairs
+
+### Additional Security Measures for Production:
+
+1. **Restrict SSH Access**: Limit to specific IPs/CIDRs
 2. **Enable Logging**: VPC Flow Logs and CloudTrail
 3. **Key Management**: Use AWS Secrets Manager
 4. **Monitoring**: Set up GuardDuty and Security Hub
+5. **Key Rotation**: Automated key rotation procedures
+6. **Network ACLs**: Additional network-layer security
+7. **IAM Roles**: Least privilege access
+8. **Encryption**: Enable encryption at rest
+9. **Monitoring**: CloudWatch alarms and alerting
+10. **Compliance**: Regular security assessments
 
-### Security Checklist
-
-- [ ] Restrict SSH access to specific IPs
-- [ ] Enable VPC Flow Logs
-- [ ] Set up CloudTrail
-- [ ] Implement key rotation
-- [ ] Add network ACLs
-- [ ] Enable GuardDuty
-- [ ] Set up Security Hub
-- [ ] Configure Config rules
-- [ ] Add WAF if needed
-- [ ] Implement least privilege IAM
-- [ ] Enable encryption at rest
-- [ ] Set up monitoring and alerting
-- [ ] Document security procedures
-- [ ] Regular security assessments
+### Learning Focus:
+This project focuses on demonstrating DevOps automation and infrastructure patterns. Security hardening would be the next step for production readiness.
 
 ## 🔄 Alternative Connection Methods
 

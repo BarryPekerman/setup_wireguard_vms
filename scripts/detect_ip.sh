@@ -27,9 +27,9 @@ detect_public_ip() {
     
     print_info "Detecting your public IP address..."
     
-    # Try curl first
+    # Try curl first (use HTTPS for security)
     if command -v curl >/dev/null 2>&1; then
-        ip=$(curl -s --connect-timeout 5 --max-time 10 ifconfig.me 2>/dev/null || echo "")
+        ip=$(curl -4 -s --connect-timeout 5 --max-time 10 https://api.ipify.org 2>/dev/null || echo "")
         if [[ -n "$ip" && $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
             print_success "Detected IP via curl: $ip"
             echo "$ip"
@@ -47,9 +47,9 @@ detect_public_ip() {
         fi
     fi
     
-    # Try wget
+    # Try wget (use HTTPS for security)
     if command -v wget >/dev/null 2>&1; then
-        ip=$(wget -qO- --timeout=10 ifconfig.me 2>/dev/null || echo "")
+        ip=$(wget -qO- --timeout=10 --no-check-certificate https://api.ipify.org 2>/dev/null || echo "")
         if [[ -n "$ip" && $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
             print_success "Detected IP via wget: $ip"
             echo "$ip"

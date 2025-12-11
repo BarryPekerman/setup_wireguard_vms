@@ -20,7 +20,9 @@
       register: apt_result
       until: apt_result is succeeded
 
-    # SSH Hardening - COMPLETELY REMOVED
+    # SSH Hardening - DISABLED for showcase/demo purposes
+    # Note: fail2ban and UFW are disabled to prevent SSH blocking during demonstrations
+    # In production, these should be enabled with proper configuration
 
     - name: Install WireGuard
       package:

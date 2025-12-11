@@ -15,6 +15,7 @@
 # Allow main documentation files
 !README.md
 !DETAILED_GUIDE.md
+!LICENSE
 
 # Allow Terraform configuration files (source code only)
 !terraform/main.tf
@@ -25,42 +26,39 @@
 !terraform/README.md
 !terraform/keys/.gitkeep
 
+# Allow Ansible playbooks (specific files only)
+!ansible/playbooks/cleanup.yml
+!ansible/playbooks/detect_ip.yml
+!ansible/playbooks/infrastructure.yml
+!ansible/playbooks/site.yml
+!ansible/playbooks/test_connectivity.yml
+!ansible/playbooks/wireguard.yml
+
+# Allow Ansible templates (specific files only)
+!ansible/templates/client.conf.j2
+!ansible/templates/server.conf.j2
+
+# Allow Ansible group variables (specific files only)
+!ansible/group_vars/all.yml
+!ansible/group_vars/security.yml
+
+# Allow Ansible scripts (specific files only)
+!ansible/scripts/generate_inventory_from_tf.sh
+!ansible/scripts/setup.sh
+!ansible/scripts/test_ip_detection.sh
+
 # Allow Ansible configuration files
-!ansible/playbooks/*.yml
-!ansible/templates/*.j2
-!ansible/group_vars/*.yml
 !ansible/requirements.yml
 !ansible/ansible.cfg
 !ansible/README.md
-!ansible/scripts/*.sh
 
-# Allow automation scripts
-!scripts/*.sh
+# Allow automation scripts (specific files only)
+!scripts/cleanup.sh
+!scripts/detect_ip.sh
+!scripts/diagnostics.sh
+!scripts/setup.sh
+!scripts/wireguard_client.sh
 
 # Allow example files
 !*.example
 !**/*.example
-
-# Explicitly ignore sensitive and generated files (SECURITY CRITICAL)
-terraform/.terraform/
-terraform/terraform.tfstate*
-terraform/terraform.tfvars
-terraform/keys/wireguard_key*
-ansible/inventory/infrastructure.ini
-ansible/collections/
-backup_*/
-local_*
-ssh_config
-*.log
-*.tmp
-.DS_Store
-Thumbs.db
-
-# Additional security exclusions
-**/terraform.tfstate*
-**/terraform.tfvars
-**/wireguard_key*
-**/infrastructure.ini
-**/local_*
-**/ssh_config
-**/backup_*
