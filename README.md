@@ -5,15 +5,33 @@ Automated WireGuard VPN setup on AWS with bastion host and private instance arch
 ## 🏗️ Architecture
 
 ```
-Internet → Bastion Host (Public) → Private Instance (Private)
-    ↓              ↓                        ↓
-Local Machine → WireGuard VPN → Target Machine
+                             +------------------------+
+                             |      Your Laptop       |
+                             |   wg0: 10.0.3.3/24     |
+                             +-----------+------------+
+                                         |
+                            WireGuard VPN (UDP 51820)
+                               10.0.3.0/24 overlay
+                                         |
+        +------------------------------------------------------------------------+
+        |                    AWS VPC 10.0.0.0/16                                 |
+        |                                                                        |
+        |  +------------------------------+     +------------------------------+ |
+        |  | Public Subnet 10.0.1.0/24    |     | Private Subnet 10.0.2.0/24   | |
+        |  |  +------------------------+  |     |  +------------------------+  | |
+        |  |  | Bastion EC2 (WG server)|  |     |  | Private EC2 (WG client)|  | |
+        |  |  | pub: elastic IP        |  |     |  | no public IP           |  | |
+        |  |  | eth0: 10.0.1.x         |  |     |  | eth0: 10.0.2.x         |  | |
+        |  |  | wg0:  10.0.3.1         |  |     |  | wg0:  10.0.3.2         |  | |
+        |  |  +------------------------+  |     |  +------------------------+  | |
+        |  +------------------------------+     +------------------------------+ |
+        +------------------------------------------------------------------------+
 ```
 
 - **VPC**: Custom VPC with public/private subnets
 - **Bastion Host**: Public EC2 instance acting as WireGuard server
-- **Private Instance**: Private EC2 instance accessible only via bastion
-- **WireGuard Network**: 10.0.3.0/24 for VPN tunnel
+- **Private Instance**: Private EC2 instance accessible only via bastion or VPN
+- **WireGuard Network**: 10.0.3.0/24 overlay connecting laptop, bastion, and private
 
 ## 🚀 Usage
 
