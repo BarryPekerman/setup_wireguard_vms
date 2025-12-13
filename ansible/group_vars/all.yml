@@ -25,4 +25,6 @@ server_ip: 10.0.3.1
 client_ip: 10.0.3.2
 
 # Global Ansible settings
-ansible_python_interpreter: /usr/bin/python3
+# Use auto_silent to auto-detect Python without warnings
+# (Ubuntu 22.04 uses python3.10, but this is future-proof)
+ansible_python_interpreter: auto_silent

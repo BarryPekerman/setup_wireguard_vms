@@ -153,12 +153,14 @@ sudo wg show
 ### Test Private Instance Access
 
 ```bash
-# Via bastion host
-ssh -i ~/.ssh/id_rsa ubuntu@<bastion_ip>
-ssh ubuntu@<private_ip>
+# SSH to bastion
+ssh -i ~/.ssh/wireguard-wireguard-setup ubuntu@<bastion_ip>
 
-# Direct via WireGuard (if configured)
-ssh ubuntu@10.0.3.2
+# SSH to private instance via Jump Host (recommended - key stays on your laptop)
+ssh -J ubuntu@<bastion_ip> -i ~/.ssh/wireguard-wireguard-setup ubuntu@<private_ip>
+
+# Direct via WireGuard (if VPN configured - simplest option)
+ssh -i ~/.ssh/wireguard-wireguard-setup ubuntu@10.0.3.2
 ```
 
 ## 🧹 Cleanup

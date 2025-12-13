@@ -207,17 +207,17 @@
       changed_when: false
       failed_when: false
 
-    - name: Test connectivity between instances
-      ping:
-        data: "WireGuard test from {{ inventory_hostname }}"
-      delegate_to: "{{ hostvars['private']['ansible_host'] }}"
-      when: inventory_hostname == 'bastion'
-      # This cross-host SSH-based test is nice-to-have only; it must never
-      # cause the playbook (or setup script) to fail if routing/SSH from
-      # bastion to private is restricted or flaky.
-      ignore_unreachable: yes
-      ignore_errors: yes
+    - name: Test WireGuard connectivity (bastion → private via VPN)
+      command: ping -c 3 -W 5 10.0.3.2
+      register: wg_ping
+      changed_when: false
       failed_when: false
+      when: inventory_hostname == 'bastion'
+
+    - name: Show WireGuard ping result
+      debug:
+        msg: "{{ 'WireGuard VPN connectivity: OK' if wg_ping.rc == 0 else 'WireGuard VPN connectivity: FAILED (this is normal if private instance WireGuard is still starting)' }}"
+      when: inventory_hostname == 'bastion' and wg_ping is defined
 
     - name: Show WireGuard status
       command: wg show

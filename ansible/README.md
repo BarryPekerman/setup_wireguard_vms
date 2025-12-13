@@ -111,11 +111,11 @@ ansible-playbook playbooks/cleanup.yml
 
 ### **Manual Verification:**
 ```bash
-# SSH to bastion
-ssh -i ~/.ssh/id_rsa ubuntu@<bastion_ip>
+# SSH to bastion (using the project's generated Ed25519 key)
+ssh -i ~/.ssh/wireguard-wireguard-setup ubuntu@<bastion_ip>
 
 # SSH to private instance via bastion (SSH tunneling)
-ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@<bastion_ip>' ubuntu@<private_ip>
+ssh -i ~/.ssh/wireguard-wireguard-setup -o ProxyCommand='ssh -i ~/.ssh/wireguard-wireguard-setup -W %h:%p ubuntu@<bastion_ip>' ubuntu@<private_ip>
 
 # Test WireGuard connectivity
 ping 10.0.3.1  # From your local machine
@@ -152,7 +152,7 @@ allowed_wireguard_cidrs: "203.0.113.0/24"  # Your office IP
 
 2. **SSH Key Issues:**
    ```bash
-   ssh-add ~/.ssh/id_rsa
+   ssh-add ~/.ssh/wireguard-wireguard-setup
    ```
 
 3. **Ansible Connection:**
@@ -172,14 +172,16 @@ ansible-playbook playbooks/site.yml -vvv
 
 ## 📊 Cost Optimization
 
-### **Instance Types:**
-- **t3.nano**: $0.0052/hour (default)
-- **t3.micro**: $0.0104/hour
-- **t3.small**: $0.0208/hour
+### **Resource Costs:**
+- **NAT Gateway:** ~$0.045/hour (~$32.85/month) - *Dominant Cost*
+- **t3.nano Instance:** $0.0052/hour (~$3.80/month)
+- **Elastic IP:** Free while attached to running instance
 
-### **Estimated Monthly Cost:**
-- **t3.nano**: ~$3.74/month
-- **t3.micro**: ~$7.49/month
+### **Estimated Total Monthly Cost:**
+- **Running 24/7:** ~$40/month
+- **Ephemeral (Learning):** < $0.10 per demo run (if destroyed immediately)
+
+> **Pro Tip:** Always run `./scripts/cleanup.sh` immediately after finishing your demo to avoid the NAT Gateway hourly charges.
 
 ## 🎯 Best Practices
 

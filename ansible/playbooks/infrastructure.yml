@@ -247,7 +247,7 @@
           VPC ID: {{ vpc.vpc.id }}
           
           Connection Commands:
-            SSH to Bastion: ssh -i ~/.ssh/id_rsa ubuntu@{{ bastion_instance.instances[0].public_ip_address }}
-            SSH to Private: ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@{{ bastion_instance.instances[0].public_ip_address }}' ubuntu@{{ private_instance.instances[0].private_ip_address }}
+            SSH to Bastion: ssh -i ~/.ssh/wireguard-wireguard-setup ubuntu@{{ bastion_instance.instances[0].public_ip_address }}
+            SSH to Private: ssh -i ~/.ssh/wireguard-wireguard-setup -o ProxyCommand='ssh -i ~/.ssh/wireguard-wireguard-setup -W %h:%p ubuntu@{{ bastion_instance.instances[0].public_ip_address }}' ubuntu@{{ private_instance.instances[0].private_ip_address }}
 
 

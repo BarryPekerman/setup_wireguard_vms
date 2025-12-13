@@ -43,8 +43,8 @@
           - Private Instance: {{ private_instance_ip | default('Check infrastructure.ini') }}
           
           SSH Tunneling Commands:
-          - Direct SSH to Bastion: ssh -i ~/.ssh/id_rsa ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}
-          - SSH to Private via Bastion: ssh -i ~/.ssh/id_rsa -o ProxyCommand='ssh -i ~/.ssh/id_rsa -W %h:%p ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}' ubuntu@{{ private_instance_ip | default('Private_IP') }}
+          - Direct SSH to Bastion: ssh -i ~/.ssh/wireguard-wireguard-setup ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}
+          - SSH to Private via Bastion: ssh -i ~/.ssh/wireguard-wireguard-setup -o ProxyCommand='ssh -i ~/.ssh/wireguard-wireguard-setup -W %h:%p ubuntu@{{ bastion_public_ip | default('Bastion_IP') }}' ubuntu@{{ private_instance_ip | default('Private_IP') }}
           
           WireGuard Network: 10.0.3.0/24
           - Server (Bastion): 10.0.3.1
